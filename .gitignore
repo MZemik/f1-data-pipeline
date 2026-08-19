@@ -1,0 +1,31 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Environment secrets
+.env
+
+# dbt
+dbt_f1/target/
+dbt_f1/dbt_packages/
+dbt_f1/logs/
+dbt_f1/profiles.yml
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Planning docs (for now not tracked)
+PROJECT_PLAN.md
+CLAUDE.md
