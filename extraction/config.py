@@ -8,6 +8,7 @@ SEASON = int(os.environ["JOLPICA_SEASON"])
 BASE_URL = os.environ["JOLPICA_BASE_URL"]
 
 RACES_ENDPOINT = "{season}/races.json"
+SPRINT_ENDPOINT = "{season}/sprint.json"
 RESULTS_ENDPOINT = "{season}/results.json"
 DRIVER_STANDINGS_ENDPOINT = "{season}/driverstandings.json"
 CONSTRUCTOR_STANDINGS_ENDPOINT = "{season}/constructorstandings.json"
