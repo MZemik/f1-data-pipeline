@@ -13,7 +13,7 @@ class JolpicaAPIError(Exception):
     pass
  
  
-class JolpicaClient:
+class JolpicaAPIClient:
     """Client for Jolpica F1 API"""
  
     def __init__(self):
@@ -60,14 +60,22 @@ class JolpicaClient:
  
         response.raise_for_status()  # 5xx -> raises HTTPError, caught by tenacity's retry
         return response.json()
- 
-    def test_connection(self) -> bool:
-        """Quick check that the API is reachable before running a full extraction."""
-        try:
-            result = self.get_races(CURRENT_SEASON)
-            return "MRData" in result
-        except (requests.exceptions.RequestException, JolpicaAPIError):
-            return False
+
+    def test_connection(self, retries: int = 3, delay: float = 2.0) -> bool:
+        """Check API availability before running a full extraction, with a few retries
+        for transient blips before concluding the server is genuinely unreachable."""
+        for attempt in range(retries):
+            try:
+                response = self.session.head(f"{self.base_url}.json", timeout=REQUEST_TIMEOUT_SECONDS)
+                if response.status_code < 500:
+                    return True
+            except requests.exceptions.RequestException:
+                pass
+            
+            if attempt < retries - 1:
+                time.sleep(delay)
+        
+        return False
  
     def close(self):
         """Close the underlying session."""
