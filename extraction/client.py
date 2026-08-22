@@ -89,10 +89,11 @@ class JolpicaClient:
     def _get(self, endpoint: str, params: dict | None = None) -> dict:
         """Fetch an endpoint, retrying only transient failures.
 
-        A 404 is represented as an empty response because it means the requested
-        race or season has no data yet.  Other 4xx responses and invalid JSON are
-        non-retryable.  Timeouts, connection failures, 408, 429, and 5xx are
-        retryable.
+        Jolpica represents "no data yet" (e.g. a future round) as HTTP 200 with
+        an empty list in the endpoint's normal shape, not a 404 — so a real 404
+        only occurs for a malformed/out-of-range request and is treated like any
+        other non-retryable 4xx, along with invalid JSON.  Timeouts, connection
+        failures, 408, 429, and 5xx are retryable.
         """
         self._throttle()
         url = f"{self.base_url}/{endpoint.lstrip('/')}.json"
@@ -113,9 +114,6 @@ class JolpicaClient:
                 str(error),
                 endpoint=endpoint,
             ) from error
-
-        if response.status_code == 404:
-            return {"MRData": {"total": "0", "RaceTable": {"Races": []}}}
 
         if response.status_code in (408, 429) or 500 <= response.status_code < 600:
             raise JolpicaRetryableError(
