@@ -203,7 +203,7 @@ class JolpicaClient:
     def get_races(self, season: int) -> dict:
         return self._get(f"{season}/races")
 
-    def get_results(self, season: int, round: int) -> dict:
+    def get_race_results(self, season: int, round: int) -> dict:
         return self._get(f"{season}/{round}/results")
 
     def get_sprint_results(self, season: int, round: int) -> dict:
