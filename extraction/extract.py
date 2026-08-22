@@ -39,7 +39,9 @@ def ensure_schema_exists(engine: Engine, schema: str) -> None:
         conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema}"))
 
 
-def extract_season(client: JolpicaClient, season: int) -> dict[str, list[dict]]:
+def extract_season(
+    client: JolpicaClient, season: int, round_limit: int | None = None
+) -> dict[str, list[dict]]:
     """Pull one season's raw payloads into per-table row lists (not yet written to DB).
 
     Each row is one API call's response, kept as a JSON string, plus the
@@ -47,6 +49,11 @@ def extract_season(client: JolpicaClient, season: int) -> dict[str, list[dict]]:
     caller can write each table in a single `to_sql(if_exists="replace")` at
     the end of the run — if extraction fails partway through, nothing has
     been written yet and the previous run's bronze data is left intact.
+
+    `round_limit` is a dev-only convenience to cut API calls while testing —
+    it slices which rounds get results/sprint/standings pulled, not the
+    incremental "lookback window" loading planned for Phase 7. `bronze.races`
+    still always gets the full calendar (one cheap call).
     """
     tables: dict[str, list[dict]] = {RACES_TABLE: []}
     for endpoint in ENDPOINTS:
@@ -61,7 +68,11 @@ def extract_season(client: JolpicaClient, season: int) -> dict[str, list[dict]]:
         }
     )
 
-    for race in races["MRData"]["RaceTable"]["Races"]:
+    race_list = races["MRData"]["RaceTable"]["Races"]
+    if round_limit is not None:
+        race_list = race_list[:round_limit]
+
+    for race in race_list:
         round_ = int(race["round"])
 
         for endpoint, method_name in ENDPOINTS.items():
@@ -114,7 +125,9 @@ def main() -> None:
             logger.error("Jolpica API unreachable, aborting")
             return
 
-        tables = extract_season(client, CURRENT_SEASON)
+        round_limit_raw = os.environ.get("EXTRACT_ROUND_LIMIT")
+        round_limit = int(round_limit_raw) if round_limit_raw else None
+        tables = extract_season(client, CURRENT_SEASON, round_limit=round_limit)
 
     load_tables(engine, tables)
 
