@@ -6,7 +6,7 @@ load_dotenv()
 
 # API configuration
 BASE_URL = "https://api.jolpi.ca/ergast/f1"
-REQUEST_DELAY_SECONDS = 0.25    # 1 / (max requests per second)
+REQUEST_DELAY_SECONDS = 0.3    # 1 / (max requests per second)
 REQUEST_TIMEOUT_SECONDS = 10
 API_MAX_RETRIES = 5
 API_RETRY_MULTIPLIER = 1  
