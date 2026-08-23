@@ -51,15 +51,16 @@ def extract_season(
         tables[endpoint] = []
 
     races = client.get_races(season)
-    tables[RACES_TABLE].append(
-        {
-            "season": season,
-            "round": None,
-            "payload": races,
-        }
-    )
-
     race_list = races["MRData"]["RaceTable"]["Races"]
+    for race in race_list:     
+        tables[RACES_TABLE].append(
+            {
+                "season": season,
+                "round": int(race["round"]),
+                "payload": race,
+            }
+        )
+
     if round_limit is not None:
         race_list = race_list[:round_limit]
 
