@@ -25,6 +25,7 @@ BRONZE_SCHEMA = "bronze"
 SILVER_SCHEMA = "silver"
 GOLD_SCHEMA = "gold"
 DEV_SCHEMA = "dev"
+META_SCHEMA = "meta"
 
 # Bronze table names
 RACES_TABLE = "races"

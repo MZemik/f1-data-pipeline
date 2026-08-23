@@ -3,9 +3,10 @@ import os
 from datetime import datetime, timezone
 
 import pandas as pd
-from sqlalchemy import create_engine, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.engine import Engine
+
+from db_utils import get_engine, ensure_schema_exists
 
 from client import JolpicaClient, JolpicaError
 from config import (
@@ -27,16 +28,6 @@ ENDPOINTS = {
     DRIVER_STANDINGS_TABLE: "get_driver_standings",
     CONSTRUCTOR_STANDINGS_TABLE: "get_constructor_standings",
 }
-
-
-def get_engine() -> Engine:
-    database_url = os.environ["DATABASE_URL"]
-    return create_engine(database_url)
-
-
-def ensure_schema_exists(engine: Engine, schema: str) -> None:
-    with engine.begin() as conn:
-        conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema}"))
 
 
 def extract_season(
