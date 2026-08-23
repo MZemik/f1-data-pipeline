@@ -50,7 +50,12 @@ def extract_season(
     for endpoint in ENDPOINTS:
         tables[endpoint] = []
 
-    races = client.get_races(season)
+    try:
+        races = client.get_races(season)
+    except JolpicaError as error:
+        logger.error("Season %s: failed to fetch race calendar: %s", season, error)
+        raise 
+    
     race_list = races["MRData"]["RaceTable"]["Races"]
     for race in race_list:     
         tables[RACES_TABLE].append(
