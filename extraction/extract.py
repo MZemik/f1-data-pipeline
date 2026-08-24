@@ -3,6 +3,7 @@ import os
 from datetime import datetime, timezone
 
 import pandas as pd
+from sqlalchemy import Integer, TIMESTAMP
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.engine import Engine
 
@@ -97,7 +98,12 @@ def load_tables(engine: Engine, tables: dict[str, list[dict]]) -> None:
             schema=BRONZE_SCHEMA,
             if_exists="replace",
             index=False,
-            dtype={"payload": JSONB},
+            dtype={
+                "season": Integer,
+                "round": Integer,
+                "payload": JSONB,
+                "_loaded_at": TIMESTAMP(timezone=True),
+            },
         )
         logger.info("Loaded %s rows into %s.%s", len(df), BRONZE_SCHEMA, table_name)
 
