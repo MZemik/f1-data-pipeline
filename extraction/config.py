@@ -20,6 +20,9 @@ TEST_CONNECTION_DELAY_SECONDS = 2.0
 CURRENT_SEASON = datetime.now().year
 SEASONS = []
 
+# Rounds
+LOOKBACK_ROUNDS = 2
+
 # Schemas
 BRONZE_SCHEMA = "bronze"
 SILVER_SCHEMA = "silver"

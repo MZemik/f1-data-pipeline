@@ -15,6 +15,7 @@ from config import (
     CONSTRUCTOR_STANDINGS_TABLE,
     CURRENT_SEASON,
     DRIVER_STANDINGS_TABLE,
+    LOOKBACK_ROUNDS,
     RACE_RESULTS_TABLE,
     RACES_TABLE,
     SPRINT_RESULTS_TABLE,
@@ -29,6 +30,25 @@ ENDPOINTS = {
     DRIVER_STANDINGS_TABLE: "get_driver_standings",
     CONSTRUCTOR_STANDINGS_TABLE: "get_constructor_standings",
 }
+
+
+def get_last_completed_round(client: JolpicaClient, season: int) -> int:
+    """How many rounds have actually happened, based on race dates vs today."""
+    races = client.get_races(season)
+    race_list = races["MRData"]["RaceTable"]["Races"]
+    today = datetime.now(timezone.utc).date()
+    
+    completed = [
+        int(race["round"]) for race in race_list
+        if datetime.strptime(race["date"], "%Y-%m-%d").date() <= today
+    ]
+    return max(completed) if completed else 0
+
+
+def get_rounds_to_process(last_loaded: int, last_available: int, lookback: int = LOOKBACK_ROUNDS) -> list[int]:
+    start = max(1, last_loaded - lookback)
+    end = last_available
+    return list(range(start, end + 1))
 
 
 def extract_season(client: JolpicaClient, season: int) -> dict[str, list[dict]]:

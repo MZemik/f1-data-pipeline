@@ -15,7 +15,6 @@ def ensure_schema_exists(engine: Engine, schema: str) -> None:
 
 
 def ensure_bronze_table_exists(engine: Engine, table_name: str) -> None:
-    ensure_schema_exists(engine, {BRONZE_SCHEMA})
     with engine.begin() as conn:
         conn.execute(text(f"""
             CREATE TABLE IF NOT EXISTS {BRONZE_SCHEMA}.{table_name} (
@@ -26,3 +25,12 @@ def ensure_bronze_table_exists(engine: Engine, table_name: str) -> None:
                 UNIQUE (season, round);        
             )
         """))
+
+
+def get_last_loaded_round(engine: Engine, table_name: str) -> int:
+    """Watermark: highest round currently present in a Bronze table.
+    Returns 0 if the table doesn't exist yet or is empty (first run)."""
+    query = text(f"SELECT MAX(round) AS max_round FROM {BRONZE_SCHEMA}.{table_name}")
+    with engine.connect() as conn:
+        result = conn.execute(query).scalar()
+    return result or 0
