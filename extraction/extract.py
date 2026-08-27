@@ -113,25 +113,24 @@ def extract_season(client: JolpicaClient, engine: Engine, season: int) -> dict[s
 
 
 def load_tables(engine: Engine, tables: dict[str, list[dict]]) -> None:
-    sql = text(f"""
-        INSERT INTO {BRONZE_SCHEMA}.{table_name} (season, round, payload, _loaded_at)
-        VALUES (:season, :round, :payload, :_loaded_at)
-        ON CONFLICT (season, round)
-        DO UPDATE SET
-            payload = EXCLUDED.payload,
-            _loaded_at = EXCLUDED._loaded_at
-    """).bindparams(
-        bindparam("season", type_=Integer),
-        bindparam("round", type_=Integer),
-        bindparam("payload", type_=JSONB),
-        bindparam("_loaded_at", type_=TIMESTAMP(timezone=True))
-    )
     for table_name, rows in tables.items():
         df = pd.DataFrame(rows)
         df["_loaded_at"] = datetime.now(timezone.utc)
         with engine.begin() as conn:
             conn.execute(
-                sql,
+                text(f"""
+                    INSERT INTO {BRONZE_SCHEMA}.{table_name} (season, round, payload, _loaded_at)
+                    VALUES (:season, :round, :payload, :_loaded_at)
+                    ON CONFLICT (season, round)
+                    DO UPDATE SET
+                        payload = EXCLUDED.payload,
+                        _loaded_at = EXCLUDED._loaded_at
+                """).bindparams(
+                    bindparam("season", type_=Integer),
+                    bindparam("round", type_=Integer),
+                    bindparam("payload", type_=JSONB),
+                    bindparam("_loaded_at", type_=TIMESTAMP(timezone=True))
+                ),
                 df.to_dict(orient="records")
             )
         logger.info("Loaded %s rows into %s.%s", len(df), BRONZE_SCHEMA, table_name)
