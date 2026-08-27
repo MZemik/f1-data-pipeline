@@ -22,7 +22,7 @@ def ensure_bronze_table_exists(engine: Engine, table_name: str) -> None:
                 round INTEGER NOT NULL,
                 payload JSONB NOT NULL,
                 _loaded_at TIMESTAMPTZ NOT NULL,
-                UNIQUE (season, round);        
+                UNIQUE (season, round)        
             )
         """))
 
