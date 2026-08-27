@@ -3,11 +3,11 @@ import os
 from datetime import datetime, timezone
 
 import pandas as pd
-from sqlalchemy import Integer, TIMESTAMP
+from sqlalchemy import text, bindparam, Integer, TIMESTAMP
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.engine import Engine
 
-from db_utils import get_engine, ensure_schema_exists
+from db_utils import get_engine, ensure_schema_exists, ensure_bronze_table_exists, get_last_loaded_round
 
 from client import JolpicaClient, JolpicaError
 from config import (
@@ -51,7 +51,7 @@ def get_rounds_to_process(last_loaded: int, last_available: int, lookback: int =
     return list(range(start, end + 1))
 
 
-def extract_season(client: JolpicaClient, season: int) -> dict[str, list[dict]]:
+def extract_season(client: JolpicaClient, engine: Engine, season: int) -> dict[str, list[dict]]:
     """Pull one season's raw payloads into per-table row lists (not yet written to DB).
 
     Each row is one API call's response, kept as a JSON string, plus the
@@ -70,6 +70,7 @@ def extract_season(client: JolpicaClient, season: int) -> dict[str, list[dict]]:
         logger.error("Season %s: failed to fetch race calendar: %s", season, error)
         raise 
 
+    ensure_bronze_table_exists(engine, RACES_TABLE)
     race_list = races["MRData"]["RaceTable"]["Races"]
     for race in race_list:     
         tables[RACES_TABLE].append(
@@ -80,10 +81,13 @@ def extract_season(client: JolpicaClient, season: int) -> dict[str, list[dict]]:
             }
         )
 
-    for race in race_list:
-        round_ = int(race["round"])
+    last_available = get_last_completed_round(client, season)
 
-        for endpoint, method_name in ENDPOINTS.items():
+    for endpoint, method_name in ENDPOINTS.items():
+        ensure_bronze_table_exists(engine, endpoint)
+        last_loaded = get_last_loaded_round(engine, endpoint)
+        rounds_to_process = get_rounds_to_process(last_loaded, last_available)
+        for round_ in rounds_to_process:
             try:
                 fetch = getattr(client, method_name)
                 payload = fetch(season, round_)
@@ -109,22 +113,27 @@ def extract_season(client: JolpicaClient, season: int) -> dict[str, list[dict]]:
 
 
 def load_tables(engine: Engine, tables: dict[str, list[dict]]) -> None:
+    sql = text(f"""
+        INSERT INTO {BRONZE_SCHEMA}.{table_name} (season, round, payload, _loaded_at)
+        VALUES (:season, :round, :payload, :_loaded_at)
+        ON CONFLICT (season, round)
+        DO UPDATE SET
+            payload = EXCLUDED.payload,
+            _loaded_at = EXCLUDED._loaded_at
+    """).bindparams(
+        bindparam("season", type_=Integer),
+        bindparam("round", type_=Integer),
+        bindparam("payload", type_=JSONB),
+        bindparam("_loaded_at", type_=TIMESTAMP(timezone=True))
+    )
     for table_name, rows in tables.items():
         df = pd.DataFrame(rows)
         df["_loaded_at"] = datetime.now(timezone.utc)
-        df.to_sql(
-            table_name,
-            engine,
-            schema=BRONZE_SCHEMA,
-            if_exists="replace",
-            index=False,
-            dtype={
-                "season": Integer,
-                "round": Integer,
-                "payload": JSONB,
-                "_loaded_at": TIMESTAMP(timezone=True),
-            },
-        )
+        with engine.begin() as conn:
+            conn.execute(
+                sql,
+                df.to_dict(orient="records")
+            )
         logger.info("Loaded %s rows into %s.%s", len(df), BRONZE_SCHEMA, table_name)
 
 
@@ -138,7 +147,7 @@ def main() -> None:
             logger.error("Jolpica API unreachable, aborting")
             return
 
-        tables = extract_season(client, CURRENT_SEASON)
+        tables = extract_season(client, engine, CURRENT_SEASON)
 
     load_tables(engine, tables)
 
