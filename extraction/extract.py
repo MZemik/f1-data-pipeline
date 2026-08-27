@@ -125,6 +125,7 @@ def load_tables(engine: Engine, tables: dict[str, list[dict]]) -> None:
                     DO UPDATE SET
                         payload = EXCLUDED.payload,
                         _loaded_at = EXCLUDED._loaded_at
+                    WHERE {BRONZE_SCHEMA}.{table_name}.payload IS DISTINCT FROM EXCLUDED.payload
                 """).bindparams(
                     bindparam("season", type_=Integer),
                     bindparam("round", type_=Integer),
