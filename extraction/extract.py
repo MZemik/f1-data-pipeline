@@ -46,7 +46,7 @@ def get_last_completed_round(client: JolpicaClient, season: int) -> int:
 
 
 def get_rounds_to_process(last_loaded: int, last_available: int, lookback: int = LOOKBACK_ROUNDS) -> list[int]:
-    start = max(1, last_loaded - lookback)
+    start = max(1, last_loaded - lookback + 1)
     end = last_available
     return list(range(start, end + 1))
 
