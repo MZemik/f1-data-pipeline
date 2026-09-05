@@ -1,5 +1,4 @@
 import logging
-import os
 from datetime import datetime, timezone
 
 import pandas as pd
@@ -113,28 +112,40 @@ def extract_season(client: JolpicaClient, engine: Engine, season: int) -> dict[s
 
 
 def load_tables(engine: Engine, tables: dict[str, list[dict]]) -> None:
+    sql_template = """
+        INSERT INTO {schema}.{table} (season, round, payload, _loaded_at)
+        VALUES (:season, :round, :payload, :_loaded_at)
+        ON CONFLICT (season, round)
+        DO UPDATE SET
+            payload = EXCLUDED.payload,
+            _loaded_at = EXCLUDED._loaded_at
+        WHERE {schema}.{table}.payload IS DISTINCT FROM EXCLUDED.payload
+    """
+
     for table_name, rows in tables.items():
         df = pd.DataFrame(rows)
-        df["_loaded_at"] = datetime.now(timezone.utc)
+        loaded_at = datetime.now(timezone.utc)
+        df["_loaded_at"] = loaded_at
+
+        sql = text(sql_template.format(schema=BRONZE_SCHEMA, table=table_name)).bindparams(
+            bindparam("season", type_=Integer),
+            bindparam("round", type_=Integer),
+            bindparam("payload", type_=JSONB),
+            bindparam("_loaded_at", type_=TIMESTAMP(timezone=True)),
+        )
+
         with engine.begin() as conn:
-            conn.execute(
-                text(f"""
-                    INSERT INTO {BRONZE_SCHEMA}.{table_name} (season, round, payload, _loaded_at)
-                    VALUES (:season, :round, :payload, :_loaded_at)
-                    ON CONFLICT (season, round)
-                    DO UPDATE SET
-                        payload = EXCLUDED.payload,
-                        _loaded_at = EXCLUDED._loaded_at
-                    WHERE {BRONZE_SCHEMA}.{table_name}.payload IS DISTINCT FROM EXCLUDED.payload
-                """).bindparams(
-                    bindparam("season", type_=Integer),
-                    bindparam("round", type_=Integer),
-                    bindparam("payload", type_=JSONB),
-                    bindparam("_loaded_at", type_=TIMESTAMP(timezone=True))
-                ),
-                df.to_dict(orient="records")
-            )
-        logger.info("Loaded %s rows into %s.%s", len(df), BRONZE_SCHEMA, table_name)
+            conn.execute(sql, df.to_dict(orient="records"))
+
+            changed_count = conn.execute(
+                text(f"SELECT COUNT(*) FROM {BRONZE_SCHEMA}.{table_name} WHERE _loaded_at = :loaded_at"),
+                {"loaded_at": loaded_at}
+            ).scalar()
+
+        logger.info(
+            "Processed %s rows for %s.%s — %s actually changed",
+            len(df), BRONZE_SCHEMA, table_name, changed_count,
+        )
 
 
 def main() -> None:
