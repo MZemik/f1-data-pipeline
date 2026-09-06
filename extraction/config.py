@@ -36,5 +36,8 @@ SPRINT_RESULTS_TABLE = "sprint_results"
 DRIVER_STANDINGS_TABLE = "driver_standings"
 CONSTRUCTOR_STANDINGS_TABLE = "constructor_standings"
 
+# Test table name
+TEST_TABLE = "test_table"
+
 # Pipeline metadata
 PIPELINE_VERSION = "1.0.0"

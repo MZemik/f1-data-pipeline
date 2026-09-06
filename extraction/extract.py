@@ -111,7 +111,7 @@ def extract_season(client: JolpicaClient, engine: Engine, season: int) -> dict[s
     return tables
 
 
-def load_tables(engine: Engine, tables: dict[str, list[dict]]) -> None:
+def load_tables(engine: Engine, schema: str, tables: dict[str, list[dict]]) -> None:
     sql_template = """
         INSERT INTO {schema}.{table} (season, round, payload, _loaded_at)
         VALUES (:season, :round, :payload, :_loaded_at)
@@ -127,7 +127,7 @@ def load_tables(engine: Engine, tables: dict[str, list[dict]]) -> None:
         loaded_at = datetime.now(timezone.utc)
         df["_loaded_at"] = loaded_at
 
-        sql = text(sql_template.format(schema=BRONZE_SCHEMA, table=table_name)).bindparams(
+        sql = text(sql_template.format(schema=schema, table=table_name)).bindparams(
             bindparam("season", type_=Integer),
             bindparam("round", type_=Integer),
             bindparam("payload", type_=JSONB),
@@ -138,13 +138,13 @@ def load_tables(engine: Engine, tables: dict[str, list[dict]]) -> None:
             conn.execute(sql, df.to_dict(orient="records"))
 
             changed_count = conn.execute(
-                text(f"SELECT COUNT(*) FROM {BRONZE_SCHEMA}.{table_name} WHERE _loaded_at = :loaded_at"),
+                text(f"SELECT COUNT(*) FROM {schema}.{table_name} WHERE _loaded_at = :loaded_at"),
                 {"loaded_at": loaded_at}
             ).scalar()
 
         logger.info(
             "Processed %s rows for %s.%s — %s actually changed",
-            len(df), BRONZE_SCHEMA, table_name, changed_count,
+            len(df), schema, table_name, changed_count,
         )
 
 
@@ -160,7 +160,7 @@ def main() -> None:
 
         tables = extract_season(client, engine, CURRENT_SEASON)
 
-    load_tables(engine, tables)
+    load_tables(engine, BRONZE_SCHEMA, tables)
 
 
 if __name__ == "__main__":

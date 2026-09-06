@@ -1,7 +1,10 @@
 import pytest
 from unittest.mock import Mock
+from sqlalchemy import text
 from client import JolpicaClient
-from extract import get_rounds_to_process, get_last_completed_round
+from extract import get_rounds_to_process, get_last_completed_round, load_tables
+from db_utils import get_engine, ensure_schema_exists, ensure_table_exists
+from config import TEST_SCHEMA,TEST_TABLE
 
 
 # Tests for get_rounds_to_process()
@@ -79,3 +82,63 @@ def test_get_last_completed_round_empty_races(mock_client):
     
     result = get_last_completed_round(mock_client, 2026)
     assert result == 0
+
+
+# Tests for load_tables()
+
+@pytest.fixture
+def test_engine():
+    engine = get_engine()
+    ensure_schema_exists(engine, TEST_SCHEMA)
+    ensure_table_exists(engine, TEST_SCHEMA, TEST_TABLE)
+    yield engine
+    with engine.begin() as conn:
+        conn.execute(text(f"DROP SCHEMA IF EXISTS {TEST_SCHEMA} CASCADE"))
+
+
+def test_load_tables_inserts_new_row(test_engine):
+    tables = {TEST_TABLE: [{"season": 2026, "round": 1, "payload": {"data": "x"}}]}
+    load_tables(test_engine, TEST_SCHEMA, tables)
+    with test_engine.connect() as conn:
+        result = conn.execute(
+            text(f"SELECT season, round, payload FROM {TEST_SCHEMA}.{TEST_TABLE} WHERE round = :round"),
+            {"round": 1}
+        ).fetchone()
+    assert result is not None
+    assert result.season == 2026
+    assert result.round == 1
+    assert result.payload == {"data": "x"}
+
+
+def test_load_tables_updates_existing_row(test_engine):
+    load_tables(test_engine, TEST_SCHEMA, {TEST_TABLE: [{"season": 2026, "round": 1, "payload": {"data": "x"}}]})
+    load_tables(test_engine, TEST_SCHEMA, {TEST_TABLE: [{"season": 2026, "round": 1, "payload": {"data": "y"}}]})
+    with test_engine.connect() as conn:
+        result = conn.execute(
+            text(f"SELECT season, round, payload FROM {TEST_SCHEMA}.{TEST_TABLE} WHERE round = :round"),
+            {"round": 1}
+        ).fetchone()
+    assert result is not None
+    assert result.season == 2026
+    assert result.round == 1
+    assert result.payload == {"data": "y"}
+
+
+def test_load_tables_skips_write_when_payload_unchanged(test_engine):
+    row = {"season": 2026, "round": 1, "payload": {"data": "x"}}
+    
+    load_tables(test_engine, TEST_SCHEMA, {TEST_TABLE: [row]})
+    with test_engine.connect() as conn:
+        first_loaded_at = conn.execute(
+            text(f"SELECT _loaded_at FROM {TEST_SCHEMA}.{TEST_TABLE} WHERE round = :round"),
+            {"round": 1}
+        ).scalar()
+    
+    load_tables(test_engine, TEST_SCHEMA, {TEST_TABLE: [row]})
+    with test_engine.connect() as conn:
+        second_loaded_at = conn.execute(
+            text(f"SELECT _loaded_at FROM {TEST_SCHEMA}.{TEST_TABLE} WHERE round = :round"),
+            {"round": 1}
+        ).scalar()
+    
+    assert first_loaded_at == second_loaded_at
