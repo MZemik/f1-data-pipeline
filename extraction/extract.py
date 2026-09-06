@@ -6,7 +6,7 @@ from sqlalchemy import text, bindparam, Integer, TIMESTAMP
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.engine import Engine
 
-from db_utils import get_engine, ensure_schema_exists, ensure_bronze_table_exists, get_last_loaded_round
+from db_utils import get_engine, ensure_schema_exists, ensure_table_exists, get_last_loaded_round
 
 from client import JolpicaClient, JolpicaError
 from config import (
@@ -69,7 +69,7 @@ def extract_season(client: JolpicaClient, engine: Engine, season: int) -> dict[s
         logger.error("Season %s: failed to fetch race calendar: %s", season, error)
         raise 
 
-    ensure_bronze_table_exists(engine, RACES_TABLE)
+    ensure_table_exists(engine, BRONZE_SCHEMA, RACES_TABLE)
     race_list = races["MRData"]["RaceTable"]["Races"]
     for race in race_list:     
         tables[RACES_TABLE].append(
@@ -83,7 +83,7 @@ def extract_season(client: JolpicaClient, engine: Engine, season: int) -> dict[s
     last_available = get_last_completed_round(client, season)
 
     for endpoint, method_name in ENDPOINTS.items():
-        ensure_bronze_table_exists(engine, endpoint)
+        ensure_table_exists(engine, BRONZE_SCHEMA, endpoint)
         last_loaded = get_last_loaded_round(engine, endpoint)
         rounds_to_process = get_rounds_to_process(last_loaded, last_available)
         for round_ in rounds_to_process:

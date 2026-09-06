@@ -14,10 +14,10 @@ def ensure_schema_exists(engine: Engine, schema: str) -> None:
         conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema}"))
 
 
-def ensure_bronze_table_exists(engine: Engine, table_name: str) -> None:
+def ensure_table_exists(engine: Engine, schema: str, table_name: str) -> None:
     with engine.begin() as conn:
         conn.execute(text(f"""
-            CREATE TABLE IF NOT EXISTS {BRONZE_SCHEMA}.{table_name} (
+            CREATE TABLE IF NOT EXISTS {schema}.{table_name} (
                 season INTEGER NOT NULL,
                 round INTEGER NOT NULL,
                 payload JSONB NOT NULL,
