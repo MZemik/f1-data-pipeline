@@ -28,21 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 class JolpicaError(Exception):
-    """Base error raised by the Jolpica client.
-
-    The fields are intended for persistence with a pipeline run.
-    """
-
-    def __init__(
-        self,
-        message: str,
-        *,
-        endpoint: str | None = None,
-        status_code: int | None = None,
-    ) -> None:
-        super().__init__(message)
-        self.endpoint = endpoint
-        self.status_code = status_code
+    """Base error raised by the Jolpica client."""
 
 
 class JolpicaRetryableError(JolpicaError):

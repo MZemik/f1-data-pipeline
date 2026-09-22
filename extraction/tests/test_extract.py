@@ -1,10 +1,10 @@
 import pytest
 from unittest.mock import Mock
 from sqlalchemy import text
-from client import JolpicaClient
-from extract import get_rounds_to_process, get_last_completed_round, load_tables
+from client import JolpicaClient, JolpicaError
+from extract import get_rounds_to_process, get_last_completed_round, load_tables, extract_season
 from db_utils import get_engine, ensure_schema_exists, ensure_table_exists
-from config import TEST_SCHEMA,TEST_TABLE
+from config import TEST_SCHEMA, TEST_TABLE
 
 
 # Tests for get_rounds_to_process()
@@ -142,3 +142,86 @@ def test_load_tables_skips_write_when_payload_unchanged(test_engine):
         ).scalar()
     
     assert first_loaded_at == second_loaded_at
+
+
+# Tests for extract_season()
+
+def test_extract_season_all_succeed(mock_client, test_engine):
+    mock_client.get_races.return_value = {
+        "MRData": {"RaceTable": {"Races": [{"round": "1", "date": "2020-01-01", "data" : "x"}]}}
+    }
+
+    mock_client.get_race_results.return_value = {
+            "MRData": {"RaceTable": {"Races": [{"round": "1", "data" : "x"}]}}
+    }
+
+    mock_client.get_sprint_results.return_value = {
+            "MRData": {"RaceTable": {"Races": [{"round": "1", "data" : "x"}]}}
+    }
+
+    mock_client.get_driver_standings.return_value = {
+                "MRData": {"StandingsTable": {"Races": [{"round": "1", "data" : "x"}]}}
+    }
+
+    mock_client.get_constructor_standings.return_value = {
+                    "MRData": {"StandingsTable": {"Races": [{"round": "1", "data" : "x"}]}}
+    }
+    
+    tables = extract_season(mock_client, test_engine, 2026, TEST_SCHEMA)
+    
+    assert len(tables["races"]) == 1
+    assert len(tables["race_results"]) == 1
+    assert len(tables["sprint_results"]) == 1
+    assert len(tables["driver_standings"]) == 1
+    assert len(tables["constructor_standings"]) == 1
+
+
+def test_extract_season_one_endpoint_failed(mock_client, test_engine):
+    mock_client.get_races.return_value = {
+        "MRData": {"RaceTable": {"Races": [{"round": "1", "date": "2020-01-01", "data": "x"},
+                                           {"round": "2", "date": "2020-02-01", "data": "y"},
+                                           {"round": "3", "date": "2020-03-01", "data": "z"}
+        ]}}
+    }
+
+    mock_client.get_race_results.side_effect = [
+        {"MRData": {"RaceTable": {"Races": [{"round": "1", "data": "x"}]}}},
+        JolpicaError("simulated failure"),                                      
+        {"MRData": {"RaceTable": {"Races": [{"round": "3", "data": "z"}]}}}
+    ]
+
+    mock_client.get_sprint_results.return_value = {
+            "MRData": {"RaceTable": {"Races": [{"round": "1", "data" : "x"},
+                                               {"round": "2", "data" : "y"},
+                                               {"round": "3", "data" : "z"}
+            ]}}
+    }
+
+    mock_client.get_driver_standings.return_value = {
+                "MRData": {"StandingsTable": {"Races": [{"round": "1", "data" : "x"},
+                                                        {"round": "2", "data" : "y"},
+                                                        {"round": "3", "data" : "z"}
+            ]}}
+    }
+
+    mock_client.get_constructor_standings.return_value = {
+                    "MRData": {"StandingsTable": {"Races": [{"round": "1", "data" : "x"},
+                                                            {"round": "2", "data" : "y"},
+                                                            {"round": "3", "data" : "z"}
+                    ]}}
+    }
+
+    tables = extract_season(mock_client, test_engine, 2026, TEST_SCHEMA)
+
+    assert len(tables["races"]) == 3
+    assert len(tables["race_results"]) == 2
+    assert len(tables["sprint_results"]) == 3
+    assert len(tables["driver_standings"]) == 3
+    assert len(tables["constructor_standings"]) == 3
+
+
+def test_extract_season_races_fetch_fails(mock_client, test_engine):
+    mock_client.get_races.side_effect = JolpicaError("calendar unavailable")
+    
+    with pytest.raises(JolpicaError):
+        extract_season(mock_client, test_engine, 2026, TEST_SCHEMA)

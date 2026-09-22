@@ -27,10 +27,10 @@ def ensure_table_exists(engine: Engine, schema: str, table_name: str) -> None:
         """))
 
 
-def get_last_loaded_round(engine: Engine, table_name: str) -> int:
+def get_last_loaded_round(engine: Engine, schema: str, table_name: str) -> int:
     """Watermark: highest round currently present in a Bronze table.
     Returns 0 if the table doesn't exist yet or is empty (first run)."""
-    query = text(f"SELECT MAX(round) AS max_round FROM {BRONZE_SCHEMA}.{table_name}")
+    query = text(f"SELECT MAX(round) AS max_round FROM {schema}.{table_name}")
     with engine.connect() as conn:
         result = conn.execute(query).scalar()
     return result or 0

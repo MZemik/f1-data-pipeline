@@ -50,14 +50,10 @@ def get_rounds_to_process(last_loaded: int, last_available: int, lookback: int =
     return list(range(start, end + 1))
 
 
-def extract_season(client: JolpicaClient, engine: Engine, season: int) -> dict[str, list[dict]]:
-    """Pull one season's raw payloads into per-table row lists (not yet written to DB).
-
-    Each row is one API call's response, kept as a JSON string, plus the
-    metadata needed to identify it. Accumulated in memory and returned so the
-    caller can write each table in a single `to_sql(if_exists="replace")` at
-    the end of the run — if extraction fails partway through, nothing has
-    been written yet and the previous run's bronze data is left intact.
+def extract_season(client: JolpicaClient, engine: Engine, season: int, schema: str) -> dict[str, list[dict]]:
+    """
+    Pull one season's raw payloads into per-table row lists (not yet written to DB).
+    Uses incremental loading, extracing only data that are not in DB plus lookback to catch changes in last data.
     """
     tables: dict[str, list[dict]] = {RACES_TABLE: []}
     for endpoint in ENDPOINTS:
@@ -69,7 +65,7 @@ def extract_season(client: JolpicaClient, engine: Engine, season: int) -> dict[s
         logger.error("Season %s: failed to fetch race calendar: %s", season, error)
         raise 
 
-    ensure_table_exists(engine, BRONZE_SCHEMA, RACES_TABLE)
+    ensure_table_exists(engine, schema, RACES_TABLE)
     race_list = races["MRData"]["RaceTable"]["Races"]
     for race in race_list:     
         tables[RACES_TABLE].append(
@@ -83,8 +79,8 @@ def extract_season(client: JolpicaClient, engine: Engine, season: int) -> dict[s
     last_available = get_last_completed_round(client, season)
 
     for endpoint, method_name in ENDPOINTS.items():
-        ensure_table_exists(engine, BRONZE_SCHEMA, endpoint)
-        last_loaded = get_last_loaded_round(engine, endpoint)
+        ensure_table_exists(engine, schema, endpoint)
+        last_loaded = get_last_loaded_round(engine, schema, endpoint)
         rounds_to_process = get_rounds_to_process(last_loaded, last_available)
         for round_ in rounds_to_process:
             try:
@@ -158,7 +154,7 @@ def main() -> None:
             logger.error("Jolpica API unreachable, aborting")
             return
 
-        tables = extract_season(client, engine, CURRENT_SEASON)
+        tables = extract_season(client, engine, CURRENT_SEASON, BRONZE_SCHEMA)
 
     load_tables(engine, BRONZE_SCHEMA, tables)
 
