@@ -91,38 +91,21 @@ class JolpicaClient:
                 timeout=REQUEST_TIMEOUT_SECONDS,
             )
         except (requests.Timeout, requests.ConnectionError) as error:
-            raise JolpicaRetryableError(
-                str(error),
-                endpoint=endpoint,
-            ) from error
+            raise JolpicaRetryableError(f"{error} (endpoint: {endpoint})") from error
+        
         except requests.RequestException as error:
-            raise JolpicaNonRetryableError(
-                str(error),
-                endpoint=endpoint,
-            ) from error
+            raise JolpicaNonRetryableError(f"{error} (endpoint: {endpoint})") from error
 
         if response.status_code in (408, 429) or 500 <= response.status_code < 600:
-            raise JolpicaRetryableError(
-                f"HTTP {response.status_code} for {url}",
-                endpoint=endpoint,
-                status_code=response.status_code,
-            )
+            raise JolpicaRetryableError(f"HTTP {response.status_code} for {url}")
 
         if 400 <= response.status_code < 500:
-            raise JolpicaNonRetryableError(
-                f"HTTP {response.status_code} for {url}",
-                endpoint=endpoint,
-                status_code=response.status_code,
-            )
+            raise JolpicaNonRetryableError(f"HTTP {response.status_code} for {url}")
 
         try:
             return response.json()
         except requests.exceptions.JSONDecodeError as error:
-            raise JolpicaNonRetryableError(
-                f"Invalid JSON response from {url}",
-                endpoint=endpoint,
-                status_code=response.status_code,
-            ) from error
+             raise JolpicaNonRetryableError(f"Invalid JSON response from {url}") from error
 
     def test_connection(
         self,
