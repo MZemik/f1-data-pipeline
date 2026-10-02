@@ -2,7 +2,7 @@ import pytest
 import responses
 import requests
 from client import JolpicaClient, JolpicaRetryableError, JolpicaNonRetryableError
-from config import API_MAX_RETRIES, TEST_CONNECTION_RETRIES
+from config import API_MAX_RETRIES
 
 URL = "https://api.jolpi.ca/ergast/f1/2026/races.json"
 OK = {"MRData": {"RaceTable": {"Races": []}}}
@@ -126,7 +126,7 @@ def test_get_raises_nonretryable_on_other_request_exception():
     assert len(responses.calls) == 1
 
 
-# Tests for _get()
+# Tests for test_connection()
 
 @responses.activate
 def test_connection_returns_true_on_200():
