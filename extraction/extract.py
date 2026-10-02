@@ -1,0 +1,163 @@
+import logging
+from datetime import datetime, timezone
+
+import pandas as pd
+from sqlalchemy import text, bindparam, Integer, TIMESTAMP
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.engine import Engine
+
+from db_utils import get_engine, ensure_schema_exists, ensure_table_exists, get_last_loaded_round
+
+from client import JolpicaClient, JolpicaError
+from config import (
+    BRONZE_SCHEMA,
+    CONSTRUCTOR_STANDINGS_TABLE,
+    CURRENT_SEASON,
+    DRIVER_STANDINGS_TABLE,
+    LOOKBACK_ROUNDS,
+    RACE_RESULTS_TABLE,
+    RACES_TABLE,
+    SPRINT_RESULTS_TABLE,
+)
+
+logger = logging.getLogger(__name__)
+
+# bronze table name -> client method name
+ENDPOINTS = {
+    RACE_RESULTS_TABLE: "get_race_results",
+    SPRINT_RESULTS_TABLE: "get_sprint_results",
+    DRIVER_STANDINGS_TABLE: "get_driver_standings",
+    CONSTRUCTOR_STANDINGS_TABLE: "get_constructor_standings",
+}
+
+
+def get_last_completed_round(client: JolpicaClient, season: int) -> int:
+    """How many rounds have actually happened, based on race dates vs today."""
+    races = client.get_races(season)
+    race_list = races["MRData"]["RaceTable"]["Races"]
+    today = datetime.now(timezone.utc).date()
+    
+    completed = [
+        int(race["round"]) for race in race_list
+        if datetime.strptime(race["date"], "%Y-%m-%d").date() <= today
+    ]
+    return max(completed) if completed else 0
+
+
+def get_rounds_to_process(last_loaded: int, last_available: int, lookback: int = LOOKBACK_ROUNDS) -> list[int]:
+    start = max(1, last_loaded - lookback + 1)
+    end = last_available
+    return list(range(start, end + 1))
+
+
+def extract_season(client: JolpicaClient, engine: Engine, season: int, schema: str) -> dict[str, list[dict]]:
+    """
+    Pull one season's raw payloads into per-table row lists (not yet written to DB).
+    Uses incremental loading, extracing only data that are not in DB plus lookback to catch changes in last data.
+    """
+    tables: dict[str, list[dict]] = {RACES_TABLE: []}
+    for endpoint in ENDPOINTS:
+        tables[endpoint] = []
+
+    try:
+        races = client.get_races(season)
+    except JolpicaError as error:
+        logger.error("Season %s: failed to fetch race calendar: %s", season, error)
+        raise 
+
+    ensure_table_exists(engine, schema, RACES_TABLE)
+    race_list = races["MRData"]["RaceTable"]["Races"]
+    for race in race_list:     
+        tables[RACES_TABLE].append(
+            {
+                "season": season,
+                "round": int(race["round"]),
+                "payload": race,
+            }
+        )
+
+    last_available = get_last_completed_round(client, season)
+
+    for endpoint, method_name in ENDPOINTS.items():
+        ensure_table_exists(engine, schema, endpoint)
+        last_loaded = get_last_loaded_round(engine, schema, endpoint)
+        rounds_to_process = get_rounds_to_process(last_loaded, last_available)
+        for round_ in rounds_to_process:
+            try:
+                fetch = getattr(client, method_name)
+                payload = fetch(season, round_)
+            except JolpicaError as error:
+                logger.error(
+                    "Season %s round %s endpoint %s failed: %s",
+                    season,
+                    round_,
+                    endpoint,
+                    error,
+                )
+                continue
+
+            tables[endpoint].append(
+                {
+                    "season": season,
+                    "round": round_,
+                    "payload": payload,
+                }
+            )
+
+    return tables
+
+
+def load_tables(engine: Engine, schema: str, tables: dict[str, list[dict]]) -> None:
+    sql_template = """
+        INSERT INTO {schema}.{table} (season, round, payload, _loaded_at)
+        VALUES (:season, :round, :payload, :_loaded_at)
+        ON CONFLICT (season, round)
+        DO UPDATE SET
+            payload = EXCLUDED.payload,
+            _loaded_at = EXCLUDED._loaded_at
+        WHERE {schema}.{table}.payload IS DISTINCT FROM EXCLUDED.payload
+    """
+
+    for table_name, rows in tables.items():
+        df = pd.DataFrame(rows)
+        loaded_at = datetime.now(timezone.utc)
+        df["_loaded_at"] = loaded_at
+
+        sql = text(sql_template.format(schema=schema, table=table_name)).bindparams(
+            bindparam("season", type_=Integer),
+            bindparam("round", type_=Integer),
+            bindparam("payload", type_=JSONB),
+            bindparam("_loaded_at", type_=TIMESTAMP(timezone=True)),
+        )
+
+        with engine.begin() as conn:
+            conn.execute(sql, df.to_dict(orient="records"))
+
+            changed_count = conn.execute(
+                text(f"SELECT COUNT(*) FROM {schema}.{table_name} WHERE _loaded_at = :loaded_at"),
+                {"loaded_at": loaded_at}
+            ).scalar()
+
+        logger.info(
+            "Processed %s rows for %s.%s — %s actually changed",
+            len(df), schema, table_name, changed_count,
+        )
+
+
+def main() -> None:
+    logging.basicConfig(level=logging.INFO)
+    engine = get_engine()
+    ensure_schema_exists(engine, BRONZE_SCHEMA)
+
+    with JolpicaClient() as client:
+        if not client.test_connection():
+            logger.error("Jolpica API unreachable, aborting")
+            return
+
+        tables = extract_season(client, engine, CURRENT_SEASON, BRONZE_SCHEMA)
+
+    load_tables(engine, BRONZE_SCHEMA, tables)
+
+
+if __name__ == "__main__":
+    main()
