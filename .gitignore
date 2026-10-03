@@ -14,10 +14,10 @@ wheels/
 .env
 
 # dbt
-dbt_f1/target/
-dbt_f1/dbt_packages/
-dbt_f1/logs/
-dbt_f1/profiles.yml
+f1_dbt/target/
+f1_dbt/dbt_packages/
+f1_dbt/logs/
+.user.yml
 
 # IDE
 .vscode/
