@@ -30,3 +30,4 @@ f1_dbt/logs/
 # Planning docs (for now not tracked)
 PROJECT_PLAN.md
 CLAUDE.md
+DECISIONS.md
