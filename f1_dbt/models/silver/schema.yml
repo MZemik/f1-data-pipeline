@@ -1,0 +1,218 @@
+version: 2
+
+models:
+  - name: stg_races
+    description: >
+      Race calendar, one row per (season, round). Parsed from the Bronze JSONB
+      payload: types cast, columns renamed, no business logic.
+    columns:
+      - name: season
+        description: Championship year.
+        data_tests:
+          - not_null
+      - name: round
+        description: Round number within the season, starting at 1.
+        data_tests:
+          - not_null
+      - name: race_name
+        description: Official Grand Prix name, e.g. Australian Grand Prix.
+        data_tests:
+          - not_null
+      - name: circuit_id
+        description: Jolpica circuit identifier, e.g. albert_park.
+        data_tests:
+          - not_null
+      - name: race_date
+        description: Local calendar date of the race as given by the API.
+        data_tests:
+          - not_null
+      - name: race_time_utc
+        description: Race start time in UTC. NULL when the API omits it.
+      - name: is_sprint_weekend
+        description: True when the payload contains a Sprint session.
+        data_tests:
+          - not_null
+      - name: sprint_date
+        description: Sprint date. NULL on non-sprint weekends.
+      - name: sprint_time_utc
+        description: Sprint start time in UTC. NULL on non-sprint weekends.
+      - name: _loaded_at
+        description: When Bronze last loaded or updated this row.
+        data_tests:
+          - not_null
+
+  - name: stg_race_results
+    description: >
+      Grand Prix results, one row per (season, round, driver). Exploded from the
+      Results array in the Bronze JSONB payload.
+    columns:
+      - name: season
+        description: Championship year.
+        data_tests:
+          - not_null
+      - name: round
+        description: Round number within the season.
+        data_tests:
+          - not_null
+      - name: driver_id
+        description: Jolpica driver identifier, e.g. max_verstappen.
+        data_tests:
+          - not_null
+      - name: constructor_id
+        description: Jolpica constructor identifier, e.g. red_bull.
+        data_tests:
+          - not_null
+      - name: grid_position
+        description: Starting grid slot. 0 for a pit-lane start in some feeds.
+        data_tests:
+          - not_null
+      - name: finish_position
+        description: Classified position, also assigned to retirements and DNS.
+        data_tests:
+          - not_null
+      - name: position_text
+        description: >
+          Position as shown officially. A number, R (retired), W (withdrawn),
+          D (disqualified) and so on.
+      - name: points
+        description: Championship points awarded for this result.
+        data_tests:
+          - not_null
+      - name: status
+        description: Finished, Lapped, Retired, Did not start, etc.
+        data_tests:
+          - not_null
+      - name: race_time_ms
+        description: Total race time in ms. NULL for drivers who did not finish.
+      - name: fastest_lap_rank
+        description: Rank of the driver's fastest lap. NULL if no lap was set.
+      - name: _loaded_at
+        description: When Bronze last loaded or updated this row.
+        data_tests:
+          - not_null
+
+  - name: stg_driver_standings
+    description: >
+      Driver championship standings after each round, one row per
+      (season, round, driver). Exploded from the DriverStandings array in the
+      Bronze JSONB payload.
+    columns:
+      - name: season
+        description: Championship year.
+        data_tests:
+          - not_null
+      - name: round
+        description: Round after which the standings were taken.
+        data_tests:
+          - not_null
+      - name: driver_id
+        description: Jolpica driver identifier, e.g. max_verstappen.
+        data_tests:
+          - not_null
+      - name: constructor_id
+        description: >
+          First constructor listed for the driver. A driver who changed team
+          during the season has several; only the first is kept here.
+        data_tests:
+          - not_null
+      - name: championship_position
+        description: >
+          Position in the standings. NULL for a driver who is listed without a
+          position, e.g. with no points scored or classified yet.
+      - name: position_text
+        description: Position as shown officially. A number, or "-" when unranked.
+      - name: points
+        description: Cumulative championship points.
+        data_tests:
+          - not_null
+      - name: wins
+        description: Cumulative race wins.
+        data_tests:
+          - not_null
+      - name: _loaded_at
+        description: When Bronze last loaded or updated this row.
+        data_tests:
+          - not_null
+
+  - name: stg_constructor_standings
+    description: >
+      Constructor championship standings after each round, one row per
+      (season, round, constructor). Exploded from the ConstructorStandings array
+      in the Bronze JSONB payload.
+    columns:
+      - name: season
+        description: Championship year.
+        data_tests:
+          - not_null
+      - name: round
+        description: Round after which the standings were taken.
+        data_tests:
+          - not_null
+      - name: constructor_id
+        description: Jolpica constructor identifier, e.g. red_bull.
+        data_tests:
+          - not_null
+      - name: championship_position
+        description: Position in the constructors' standings.
+      - name: position_text
+        description: Position as shown officially. A number, or "-" when unranked.
+      - name: points
+        description: Cumulative championship points.
+        data_tests:
+          - not_null
+      - name: wins
+        description: Cumulative race wins.
+        data_tests:
+          - not_null
+      - name: _loaded_at
+        description: When Bronze last loaded or updated this row.
+        data_tests:
+          - not_null
+
+  - name: stg_sprint_results
+    description: >
+      Sprint results, one row per (season, round, driver), only for sprint
+      weekends. Exploded from the SprintResults array in the Bronze JSONB payload.
+    columns:
+      - name: season
+        description: Championship year.
+        data_tests:
+          - not_null
+      - name: round
+        description: Round number within the season.
+        data_tests:
+          - not_null
+      - name: driver_id
+        description: Jolpica driver identifier, e.g. max_verstappen.
+        data_tests:
+          - not_null
+      - name: constructor_id
+        description: Jolpica constructor identifier, e.g. red_bull.
+        data_tests:
+          - not_null
+      - name: grid_position
+        description: Starting grid slot for the sprint.
+        data_tests:
+          - not_null
+      - name: finish_position
+        description: Order in the results table, also assigned to retirements.
+        data_tests:
+          - not_null
+      - name: position_text
+        description: Official classification. A number, or R, W, D, etc.
+      - name: points
+        description: Sprint points awarded (top 8 score).
+        data_tests:
+          - not_null
+      - name: status
+        description: Finished, Retired, etc.
+        data_tests:
+          - not_null
+      - name: race_time_ms
+        description: Total sprint time in ms. NULL for drivers who did not finish.
+      - name: fastest_lap_rank
+        description: Rank of the driver's fastest lap. NULL if no lap was set.
+      - name: _loaded_at
+        description: When Bronze last loaded or updated this row.
+        data_tests:
+          - not_null
