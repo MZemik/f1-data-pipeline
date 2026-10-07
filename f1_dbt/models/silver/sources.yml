@@ -1,0 +1,19 @@
+version: 2
+
+sources:
+  - name: bronze
+    schema: bronze
+    description: Raw Jolpica API payloads, one row per season and round.
+    config:
+      loaded_at_field: _loaded_at
+    tables:
+      - name: races
+        description: Race calendar, one JSONB payload per round.
+      - name: race_results
+        description: Grand Prix results, one JSONB payload per round.
+      - name: sprint_results
+        description: Sprint results, one JSONB payload per sprint round.
+      - name: driver_standings
+        description: Driver championship standings after each round.
+      - name: constructor_standings
+        description: Constructor championship standings after each round.
