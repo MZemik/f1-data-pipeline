@@ -1,0 +1,54 @@
+name: CI dbt
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  dbt-build:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: f1_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Throwaway database inside the service container, not Neon.
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/f1_test
+      DBT_HOST: localhost
+      DBT_USER: postgres
+      DBT_PASSWORD: postgres
+      DBT_DBNAME: f1_test
+      DBT_SSLMODE: disable
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Load Bronze fixture
+        run: PYTHONPATH=extraction uv run python ci/load_bronze_fixture.py
+
+      - name: dbt build
+        working-directory: f1_dbt
+        run: uv run dbt build

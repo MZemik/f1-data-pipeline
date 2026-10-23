@@ -9,5 +9,5 @@ f1_dbt:
       dbname: "{{ env_var('DBT_DBNAME') }}"
       port: 5432
       schema: silver
-      sslmode: require
+      sslmode: "{{ env_var('DBT_SSLMODE', 'require') }}"
       threads: 4
